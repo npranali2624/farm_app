@@ -1,52 +1,150 @@
+import 'package:farmer_app/presentation/pages/admin/farmer/farmer_detail_page.dart';
+import 'package:farmer_app/presentation/pages/admin/supplier/supplier_details_page.dart';
 import 'package:flutter/material.dart';
 import 'package:farmer_app/services/user_api_service.dart';
 
-class NotificationsPage extends StatefulWidget
-{
+
+class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
+
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
 }
 
 class _NotificationsPageState extends State<NotificationsPage>
-    with SingleTickerProviderStateMixin
-{
-  late Future<List<Map<String, dynamic>>> futureUsers;
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool isLoading = true;
+  List<Map<String, dynamic>> farmers = [];
+  List<Map<String, dynamic>> suppliers = [];
+
+  final Color primaryColor = const Color(0xFF1B5E20);
+  final Color secondaryColor = const Color(0xFF66BB6A);
+
   @override
-  void initState()
-  {
+  void initState() {
     super.initState();
-    futureUsers = UserApiService.getAllUsers();
     _tabController = TabController(length: 2, vsync: this);
+    fetchUsers();
   }
 
-  String getName(Map user)
-  {
-    return "${user['fname']} ${user['lname']}";
+  Future<void> fetchUsers() async {
+    try {
+      final allUsers = await UserApiService.getAllUsers();
+
+      // Only keep users with pending verification
+      final pendingUsers = allUsers.where((user) =>
+      user['otp_verified'] == false || user['physical_verified'] == false
+      ).toList();
+
+      setState(() {
+        farmers = pendingUsers
+            .where((u) => u['role']?.toString().toLowerCase() == 'farmer')
+            .toList();
+        suppliers = pendingUsers
+            .where((u) => u['role']?.toString().toLowerCase() == 'supplier')
+            .toList();
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error fetching users: $e")),
+      );
+    }
   }
 
-  List<Map<String, dynamic>> filterUsersByRole(
-      List<Map<String, dynamic>> users, String role)
-  {
-    return users.where((u) => u['role'] == role).toList();
+  Widget buildUserList(List<Map<String, dynamic>> users, String role) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (users.isEmpty) {
+      return Center(
+        child: Text(
+          "No $role pending verification",
+          style: const TextStyle(fontSize: 16),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: users.length,
+      itemBuilder: (context, index) {
+        final user = users[index];
+        final name =
+        "${user['fname'] ?? ''} ${user['mname'] ?? ''} ${user['lname'] ?? ''}".trim();
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.isEmpty ? "Unknown" : name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                // Show OTP Verification Pending
+                if (user['otp_verified'] == false)
+                  Row(
+                    children: const [
+                      Icon(Icons.sms, size: 18, color: Colors.deepOrange),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "OTP Verification Pending",
+                          style: TextStyle(
+                            color: Colors.deepOrange,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                if (user['otp_verified'] == false)
+                  const SizedBox(height: 4),
+
+                // Show Physical Verification Pending
+                if (user['physical_verified'] == false)
+                  Row(
+                    children: const [
+                      Icon(Icons.verified_user, size: 18, color: Colors.deepOrange),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "Physical Verification Pending",
+                          style: TextStyle(
+                            color: Colors.deepOrange,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
-  void dispose()
-  {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context)
-  {
-    final Color primaryColor = const Color(0xFF1B5E20);
-    final Color secondaryColor = const Color(0xFF66BB6A);
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
+          // Gradient AppBar with back button and centered title (size same as before)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 35, horizontal: 15),
@@ -58,16 +156,13 @@ class _NotificationsPageState extends State<NotificationsPage>
             child: Stack(
               alignment: Alignment.center,
               children: [
-                /// BACK BUTTON
                 Align(
                   alignment: Alignment.centerLeft,
                   child: GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                    child: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
                 ),
-
-                /// TITLE
                 const Center(
                   child: Text(
                     "Notifications",
@@ -82,11 +177,10 @@ class _NotificationsPageState extends State<NotificationsPage>
             ),
           ),
 
-          /// TABS FOR FARMER AND SUPPLIER
+          // Tabs below AppBar
           TabBar(
             controller: _tabController,
             labelColor: primaryColor,
-            unselectedLabelColor: Colors.grey,
             indicatorColor: primaryColor,
             tabs: const [
               Tab(text: "Farmers"),
@@ -94,73 +188,18 @@ class _NotificationsPageState extends State<NotificationsPage>
             ],
           ),
 
-          /// TAB CONTENT
+          // Tab views
           Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: futureUsers,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting)
-                {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError)
-                {
-                  return Center(
-                      child: Text("Error: ${snapshot.error.toString()}"));
-                }
-                final allUsers = snapshot.data ?? [];
-
-                // Separate lists
-                final farmers = filterUsersByRole(allUsers, "farmer");
-                final suppliers = filterUsersByRole(allUsers, "supplier");
-                return TabBarView(
-                  controller: _tabController,
-                  children: [
-                    buildUserList(farmers, "farmer"),
-                    buildUserList(suppliers, "supplier"),
-                  ],
-                );
-              },
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                buildUserList(farmers, "farmer"),
+                buildUserList(suppliers, "supplier"),
+              ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  /// WIDGET TO BUILD USER LIST
-  Widget buildUserList(List<Map<String, dynamic>> users, String role)
-  {
-    if (users.isEmpty)
-    {
-      return const Center(child: Text("No Notifications"));
-    }
-
-    return ListView.builder(
-      itemCount: users.length,
-      itemBuilder: (context, index)
-      {
-        final user = users[index];
-        final name = getName(user);
-
-        String title;
-        String subtitle;
-
-        if (user['status'] == "pending")
-        {
-          title = "${user['role']} Verification Pending";
-          subtitle = "$name needs approval";
-        } else {
-          title = "${user['role']} Approved";
-          subtitle = "$name verified";
-        }
-
-        return ListTile(
-          leading: const Icon(Icons.notifications, color: Colors.orange),
-          title: Text(title),
-          subtitle: Text(subtitle),
-        );
-      },
     );
   }
 }
