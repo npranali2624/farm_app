@@ -169,13 +169,12 @@ class AdminDashboardPage extends StatelessWidget {
                           backgroundColor:
                           Colors.transparent,
                           builder: (context) {
-                            return const FilterBottomSheet();
+                            return FilterBottomSheet(
+                              initialFilters: {},
+                            );
                           },
                         );
 
-                        if (result != null) {
-                          print(result);
-                        }
                       },
                       child: const Icon(Icons.filter_list,
                           color: Colors.white, size: 28),
